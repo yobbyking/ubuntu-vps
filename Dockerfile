@@ -125,9 +125,8 @@ RUN cat > /etc/motd << 'EOF'
    • tmux, btop, vim, nano, htop
 
    Quick commands:
-   • install-ptero panel   → install Pterodactyl Panel (web UI)
-   • install-ptero wings   → install Pterodactyl Wings (game daemon)
-   • install-ptero all     → install both
+   • install-ptero          → install Pterodactyl (interactive menu)
+   • start-ptero-services   → start MariaDB + Redis + PHP-FPM + Nginx + queue worker
    • docker ps             → check Docker is running
    • btop                  → live system monitor
 
@@ -142,7 +141,8 @@ EOF
 # ============================================================
 COPY entrypoint.sh /entrypoint.sh
 COPY install-ptero.sh /usr/local/bin/install-ptero
-RUN chmod +x /entrypoint.sh /usr/local/bin/install-ptero
+COPY start-ptero-services.sh /usr/local/bin/start-ptero-services
+RUN chmod +x /entrypoint.sh /usr/local/bin/install-ptero /usr/local/bin/start-ptero-services
 
 ENV PATH="/root/.bun/bin:/usr/local/bin:${PATH}"
 

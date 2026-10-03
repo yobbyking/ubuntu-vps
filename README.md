@@ -60,34 +60,56 @@ After login, you'll see:
    ║   Your Ubuntu 24.04 VPS with Docker — ready for     ║
    ║   Pterodactyl Panel & Wings                          ║
    ╚═══════════════════════════════════════════════════════╝
-
-   SSH user: root
-   Password: see VPS_PASSWORD env var (default: 2026yobby)
-
-   Pre-installed:
-   • Docker (CLI + daemon)
-   • Node.js 20 LTS + Bun  • PHP 8.2 + Composer
-   • Nginx + Certbot  • MariaDB/PostgreSQL/Redis clients
-   • tmux, btop, vim, nano, htop
-
-   Quick commands:
-   • install-ptero panel   → install Pterodactyl Panel (web UI)
-   • install-ptero wings   → install Pterodactyl Wings (game daemon)
-   • install-ptero all     → install both
-   • docker ps             → check Docker is running
-   • btop                  → live system monitor
 ```
+
+## 🌐 Accessing the Panel from your browser (after install)
+
+The Panel listens on port **80 inside the VPS**, but Railway only exposes SSH (port 22 → 10754) via Public TCP. To open the Panel in your browser, use **SSH port-forwarding**:
+
+### Method 1: Termius Port Forwarding (recommended — keeps tunnel alive)
+
+1. Open **Termius** → click your host → **Port Forwarding** tab
+2. Click **+ Add Rule** and fill in:
+
+| Field | Value |
+|-------|-------|
+| **Label** | `Pterodactyl Panel` |
+| **Type** | `Local` |
+| **Local Host** | `localhost` |
+| **Local Port** | `8080` |
+| **Remote Host** | `localhost` |
+| **Remote Port** | `80` |
+| **Use Host** | (select your Ubuntu VPS host) |
+
+3. Click **Save** → toggle the rule **ON**
+4. In your browser, open: **http://localhost:8080**
+5. 🎉 The Pterodactyl login page appears!
+
+### Method 2: Command-line SSH tunnel (one-liner)
+
+From any terminal:
+```bash
+ssh -L 8080:localhost:80 -N root@altaria.proxy.rlwy.net -p 10754
+# Then open http://localhost:8080 in your browser
+# (Keep this terminal open while you use the Panel)
+```
+
+### Method 3: Expose publicly via another Railway Public TCP
+
+Railway lets you add MULTIPLE Public TCP ports. Add another for port `80`:
+1. Railway → your service → **Settings** → **Networking** → **Public TCP** → Add another port `80`
+2. Railway gives you a second address like `tcp-xyz-abc.up.railway.app:32198`
+3. Open `http://tcp-xyz-abc.up.railway.app:32198` in your browser
+
+⚠️ **Public exposure warning**: Anyone with this URL can hit your Panel. Use HTTPS + a strong admin password if you go this route.
 
 ## 🐦 Installing Pterodactyl
 
 ### Quick install
 
 ```bash
-install-ptero          # Interactive menu
-# or:
-install-ptero panel    # Just the Panel
-install-ptero wings    # Just Wings
-install-ptero all      # Both
+install-ptero          # Interactive menu (Panel + Wings)
+start-ptero-services   # Start MariaDB + Redis + PHP-FPM + Nginx + queue worker
 ```
 
 ### ⚠️ Important: Railway + Docker limitation
