@@ -3,14 +3,13 @@ set -e
 
 # ============================================================
 # VPS entrypoint — runs on every container start
-# Creates the user, sets the password, optionally adds a
-# public key, optionally clones a git repo, then starts sshd.
+# Sets up the root user password, optional SSH key, then
+# starts sshd (and tries to start Docker daemon).
 # ============================================================
 
-VPS_USERNAME="${VPS_USERNAME:-swiftpay}"
-VPS_PASSWORD="${VPS_PASSWORD:-ChangeMe!2026}"
+VPS_USERNAME="${VPS_USERNAME:-root}"
+VPS_PASSWORD="${VPS_PASSWORD:-2026yobby}"
 VPS_PUBLIC_KEY="${VPS_PUBLIC_KEY:-}"
-VPS_GIT_REPO="${VPS_GIT_REPO:-}"
 VPS_SSH_PORT="${VPS_SSH_PORT:-22}"
 
 echo "================================================"
@@ -20,24 +19,24 @@ echo "  SSH Port : $VPS_SSH_PORT (internal)"
 echo "  Password : [set via VPS_PASSWORD env var]"
 echo "================================================"
 
-# 1) Create or update the user
-if ! id "$VPS_USERNAME" &>/dev/null; then
-    useradd -m -s /bin/bash -G sudo "$VPS_USERNAME"
-    echo "$VPS_USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
-    echo "[entrypoint] Created user: $VPS_USERNAME"
-else
-    echo "[entrypoint] User already exists: $VPS_USERNAME"
+# 1) Ensure the user exists (root always does; for custom users create it)
+if [ "$VPS_USERNAME" != "root" ]; then
+    if ! id "$VPS_USERNAME" &>/dev/null; then
+        useradd -m -s /bin/bash -G sudo "$VPS_USERNAME"
+        echo "$VPS_USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+        echo "[entrypoint] Created user: $VPS_USERNAME"
+    fi
 fi
 
 # 2) Set the user's password
 echo "$VPS_USERNAME:$VPS_PASSWORD" | chpasswd
 echo "[entrypoint] Password updated for $VPS_USERNAME"
 
-# 3) Restrict SSH to only this user
+# 3) Allow this user via SSH
 sed -i "/^AllowUsers/d" /etc/ssh/sshd_config
 echo "AllowUsers $VPS_USERNAME" >> /etc/ssh/sshd_config
 
-# 4) Optionally add a public key (so the user can use either password OR key auth)
+# 4) Optionally add a public key for key-based auth
 HOME_DIR=$(getent passwd "$VPS_USERNAME" | cut -d: -f6)
 if [ -n "$VPS_PUBLIC_KEY" ]; then
     mkdir -p "$HOME_DIR/.ssh"
@@ -48,16 +47,25 @@ if [ -n "$VPS_PUBLIC_KEY" ]; then
     echo "[entrypoint] Added public key from VPS_PUBLIC_KEY env var"
 fi
 
-# 5) Optionally clone a git repo into the user's home dir on first boot
-if [ -n "$VPS_GIT_REPO" ] && [ ! -d "$HOME_DIR/$(basename "$VPS_GIT_REPO" .git)" ]; then
-    echo "[entrypoint] Cloning $VPS_GIT_REPO ..."
-    sudo -u "$VPS_USERNAME" git clone "$VPS_GIT_REPO" "$HOME_DIR/$(basename "$VPS_GIT_REPO" .git)" || echo "[entrypoint] clone failed, continuing"
-fi
-
-# 6) Generate SSH host keys if missing (sshd won't start without them)
+# 5) Generate SSH host keys if missing
 ssh-keygen -A 2>/dev/null
 
-# 7) Fix permissions on the user's home dir
+# 6) Try to start Docker daemon (will likely fail on Railway without privileged mode)
+echo "[entrypoint] Attempting to start Docker daemon..."
+if command -v dockerd &>/dev/null; then
+    ( dockerd > /var/log/dockerd.log 2>&1 ) &
+    DOCKERD_PID=$!
+    sleep 3
+    if ! kill -0 $DOCKERD_PID 2>/dev/null; then
+        echo "[entrypoint] ⚠️  Docker daemon failed to start — see /var/log/dockerd.log"
+        echo "[entrypoint]    This is normal on Railway (containers aren't privileged)."
+        echo "[entrypoint]    For real Docker hosting, see README → recommended VPS providers."
+    else
+        echo "[entrypoint] ✅ Docker daemon started (PID $DOCKERD_PID)"
+    fi
+fi
+
+# 7) Fix home dir permissions
 chown -R "$VPS_USERNAME:$VPS_USERNAME" "$HOME_DIR"
 
 echo "[entrypoint] Starting SSH daemon on port $VPS_SSH_PORT ..."

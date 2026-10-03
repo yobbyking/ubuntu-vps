@@ -1,14 +1,14 @@
-# Ubuntu 24.04 VPS on Railway
+# Ubuntu 24.04 VPS on Railway (with Docker, for Pterodactyl Panel + Wings)
 
-> A clean Ubuntu VPS with SSH access (username + password) you can deploy on Railway and SSH into from anywhere. Pre-installed with Node 20, Bun, Docker CLI, and common dev tools.
+> A clean Ubuntu VPS you can SSH into as **root**, install any panel on (Pterodactyl, aaPanel, HestiaCP, CyberPanel), and run Docker containers for game servers.
 
-## 🚀 Deploy on Railway (5 minutes)
+## 🚀 Deploy on Railway (3 minutes)
 
-### Step 1 — Create the Railway project
+### Step 1 — Create the Railway service
 
-1. Go to https://railway.app → New Project → **Deploy from GitHub repo**
-2. Select the `yobbyking/ubuntu-vps` repo (fork it to your account first if you want to customize)
-3. Railway auto-detects the Dockerfile and starts building
+1. Go to https://railway.app → **New Project** → **Deploy from GitHub repo**
+2. Pick this repo (`yobbyking/ubuntu-vps`)
+3. Railway auto-detects the Dockerfile and starts building (~5 min for first build)
 
 ### Step 2 — Set environment variables
 
@@ -16,194 +16,228 @@ In Railway → your service → **Variables** tab, add:
 
 | Variable | Value | Required? |
 |----------|-------|-----------|
-| `VPS_USERNAME` | `swiftpay` (or any username you want) | ✅ Yes |
-| `VPS_PASSWORD` | A strong password — e.g. `MyStr0ng!Pass2026` | ✅ Yes |
-| `VPS_PUBLIC_KEY` | Your SSH public key (optional, enables key auth) | ⬜ Optional |
-| `VPS_GIT_REPO` | A git repo to auto-clone on first boot (optional) | ⬜ Optional |
-| `VPS_SSH_PORT` | `22` (default — Railway exposes this via Public TCP) | ⬜ Optional |
+| `VPS_USERNAME` | `root` | ✅ |
+| `VPS_PASSWORD` | `2026yobby` (or any strong password — change this!) | ✅ |
+| `VPS_PUBLIC_KEY` | Your `~/.ssh/id_ed25519.pub` (optional, for SSH key auth) | ⬜ |
+| `VPS_SSH_PORT` | `22` | ⬜ |
 
-> **Generate a strong password**: `openssl rand -base64 18` (run in any terminal)
-
-> **Generate an SSH key pair** (optional, more secure than password):
-> ```bash
-> ssh-keygen -t ed25519 -C "my-vps-key"
-> # Then paste the contents of ~/.ssh/id_ed25519.pub into VPS_PUBLIC_KEY env var
-> ```
+⚠️ **Change your password!** The default `2026yobby` is in the repo and anyone can see it. Set a unique strong password (16+ chars) like `Xy7$Pq2!mB9#wK4e` via Railway env vars.
 
 ### Step 3 — Expose SSH publicly (Public TCP)
 
-1. In Railway → your service → **Settings** → **Networking**
+1. Railway → your service → **Settings** → **Networking**
 2. Click **"Public TCP"** and enable it for port `22`
-3. Railway gives you a public address like:
+3. Railway gives you an address like:
    ```
    tcp-abc123-xyz.up.railway.app:54321
    ```
-   (the port is random — Railway assigns one)
+   (port is random — Railway assigns one)
 
-### Step 4 — SSH into your VPS
+### Step 4 — Log in with Termius
 
-```bash
-ssh swiftpay@tcp-abc123-xyz.up.railway.app -p 54321
-# Enter your VPS_PASSWORD when prompted
+#### A) Add a new host in Termius
+
+1. Open **Termius** (download from https://termius.com — free tier works)
+2. Click **"New Host"** (or `+` button → Host)
+3. Fill in:
+
+| Field | Value |
+|-------|-------|
+| **Label** | `My Ubuntu VPS` (any name) |
+| **Hostname** | `tcp-abc123-xyz.up.railway.app` (from Railway) |
+| **Port** | `54321` (from Railway — the random port, NOT 22) |
+| **Username** | `root` |
+| **Password** | `2026yobby` (or your custom password) |
+
+4. Click **Save**
+5. Click the host to connect — you'll be in your Ubuntu VPS!
+
+#### B) See the welcome banner
+
+After login, you'll see:
+```
+   ╔═══════════════════════════════════════════════════════╗
+   ║   Your Ubuntu 24.04 VPS with Docker — ready for     ║
+   ║   Pterodactyl Panel & Wings                          ║
+   ╚═══════════════════════════════════════════════════════╝
+
+   SSH user: root
+   Password: see VPS_PASSWORD env var (default: 2026yobby)
+
+   Pre-installed:
+   • Docker (CLI + daemon)
+   • Node.js 20 LTS + Bun  • PHP 8.2 + Composer
+   • Nginx + Certbot  • MariaDB/PostgreSQL/Redis clients
+   • tmux, btop, vim, nano, htop
+
+   Quick commands:
+   • install-ptero panel   → install Pterodactyl Panel (web UI)
+   • install-ptero wings   → install Pterodactyl Wings (game daemon)
+   • install-ptero all     → install both
+   • docker ps             → check Docker is running
+   • btop                  → live system monitor
 ```
 
-That's it — you have a full Ubuntu VPS you can SSH into and do anything with.
+## 🐦 Installing Pterodactyl
+
+### Quick install
+
+```bash
+install-ptero          # Interactive menu
+# or:
+install-ptero panel    # Just the Panel
+install-ptero wings    # Just Wings
+install-ptero all      # Both
+```
+
+### ⚠️ Important: Railway + Docker limitation
+
+Pterodactyl Wings (the game-server daemon) needs Docker to spawn containers. On Railway:
+- Docker **CLI** is installed and works
+- Docker **daemon** will likely FAIL to start because Railway containers are not privileged by default
+
+When you run `docker ps` you'll see:
+```
+Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?
+```
+
+### What this means for you
+
+| Component | Works on Railway? |
+|-----------|-------------------|
+| SSH access as root | ✅ Yes |
+| Install Pterodactyl Panel (web UI) | ✅ Yes (but needs port 80/443 public) |
+| Install Pterodactyl Wings (game daemon) | ❌ No (Docker daemon won't start) |
+| Run Minecraft / game servers | ❌ No (needs Wings + Docker) |
+
+### Recommended: Real VPS for Pterodactyl
+
+For actual game-server hosting with Pterodactyl Wings, deploy this same Dockerfile on a real VPS where Docker works natively:
+
+| Provider | Min price | Free credit? | Notes |
+|----------|-----------|---------------|-------|
+| **Hetzner** | €4.59/mo | €20 sign-up | Best price/performance in EU/US |
+| **DigitalOcean** | $4/mo | $200 credit 60 days | Referral credit easy to find |
+| **Vultr** | $5/mo | $100 credit 30 days | Many regions |
+| **Linode (Akamai)** | $5/mo | $100 credit 60 days | Solid, simple |
+| **Contabo** | €4.50/mo | none | Best RAM/€ in EU |
+
+For Railway: use it as your development/admin VPS, or for the Pterodactyl Panel only. Use a real VPS for Wings.
 
 ## 🧰 What's pre-installed
 
-| Tool | Version | Why |
-|------|---------|-----|
-| **Ubuntu** | 24.04 LTS | Latest LTS base |
-| **Node.js** | 20 LTS | For Next.js / Express / any Node app |
-| **Bun** | latest | Faster JS runtime + package manager |
-| **Docker CLI** | latest | Build & inspect images (no daemon) |
-| **Git** | latest | Clone repos |
-| **Python 3** | system | Scripts / data processing |
-| **build-essential** | gcc, g++, make | Compile native modules (better-sqlite3, sharp, etc.) |
-| **vim, nano** | — | Text editors |
-| **tmux** | — | Persistent terminal sessions (keep apps running after SSH logout) |
-| **htop, lsof, net-tools, dnsutils** | — | Diagnostics |
-| **ufw, zsh** | — | Firewall + alternative shell |
+| Tool | Why |
+|------|-----|
+| **Ubuntu 24.04 LTS** | Latest LTS base |
+| **Docker** (CLI + daemon) | Required by Pterodactyl Wings |
+| **Node.js 20 LTS** | Pterodactyl Wings runtime |
+| **Bun** | Modern JS runtime (faster than Node) |
+| **PHP 8.2 + Composer** | Pterodactyl Panel backend |
+| **Nginx** | Web server for Panel UI |
+| **Certbot** | Free Let's Encrypt SSL certs |
+| **MariaDB / PostgreSQL / Redis clients** | Talk to your DBs |
+| **Git, vim, nano, tmux, btop, htop** | Dev workflow |
+| **Python 3, build-essential** | Scripts + native module compilation |
+| **UFW** | Firewall (be careful with SSH rules!) |
+| **zsh, fish** | Alternative shells |
 
-## 📦 Quick deploy SwiftPay inside the VPS
-
-Once you SSH in, just run the pre-installed helper:
-
-```bash
-swiftpay-deploy
-```
-
-This will:
-1. Clone `https://github.com/yobbyking/swiftpay` to `~/swiftpay`
-2. Print the next steps (set env vars, install deps, build, start)
-
-Then to actually run SwiftPay in the background (survives SSH logout):
+## 📋 Common commands
 
 ```bash
-cd ~/swiftpay
-cp .env.example .env
-nano .env  # fill in DATABASE_URL, JWT_SECRET, SWIFTWALLET_API_KEY etc.
-bun install
-bun run db:push
-bun run build
+# After SSH in:
+install-ptero                          # Pterodactyl installer menu
+install-ptero panel                    # Install Panel
+install-ptero wings                    # Install Wings
+install-ptero status                   # Check what's installed
 
-# Option A — nohup (simple)
-nohup bun run start > swiftpay.log 2>&1 &
-echo $! > swiftpay.pid
-
-# Option B — tmux (recommended, can reattach to see live logs)
-tmux new -d -s swiftpay 'bun run start'
-# Reattach: tmux attach -t swiftpay
+docker ps                              # Check Docker daemon
+docker info                            # Detailed Docker info
+btop                                   # Live system monitor
+tmux new -s work                       # Persistent session (reattach: tmux a -t work)
+df -h && free -h                      # Disk + memory check
+sudo -i                                # Already root, but confirms
+passwd                                 # Change root password
 ```
 
-## 🌐 Expose SwiftPay on the internet
+## 🔄 Persistence — IMPORTANT
 
-Railway gives you one **HTTP** service per project. To run both SSH (TCP) and HTTP (the app) you have two options:
+⚠️ **Container filesystem is ephemeral** — without a volume, anything you install or save will be LOST on container restart.
 
-**Option A — Two Railway services (recommended)**
-- Service 1: this `ubuntu-vps` repo — exposes SSH on Public TCP
-- Service 2: the `yobbyking/swiftpay` repo — exposes HTTP on Railway's default domain
+To make `/root` persist across restarts:
 
-**Option B — Tunnel from inside the VPS**
-Use a free tunnel like Cloudflare Tunnel or ngrok to expose port 3000 from your VPS:
-```bash
-# Inside the VPS, after starting SwiftPay on port 3000:
-# Using Cloudflare Tunnel (recommended, free, stable)
-sudo apt install cloudflared -y
-cloudflared tunnel --url http://localhost:3000
+1. Railway → your service → **Settings** → **Volumes** → **Add Volume**
+2. Mount path: `/root` (or wherever you want persistence)
+3. Click **Add Volume**
 
-# Or using ngrok
-sudo apt install ngrok -y
-ngrok http 3000
-```
+Now your home directory, installed packages (in `/root`), and Pterodactyl data persist across restarts and deploys.
 
-## 🔒 Security tips
+For Pterodactyl specifically, you may also want to mount these paths:
+- `/var/lib/pterodactyl` — Wings server data
+- `/var/www/pterodactyl` — Panel files
+- `/etc/pterodactyl` — Wings config
+- `/var/lib/docker` — Docker images + containers (this gets HUGE)
 
-1. **Use a strong password** (≥16 chars, mixed case + numbers + symbols). Generate with `openssl rand -base64 18`.
-2. **Better: use SSH keys** — set `VPS_PUBLIC_KEY` env var with your `~/.ssh/id_ed25519.pub` contents. Then disable password auth:
-   ```bash
-   # Once logged in via SSH key:
-   sudo sed -i 's/^PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
-   sudo systemctl restart ssh  # or: sudo service ssh restart
-   ```
-3. **Don't share your password** — rotate it via Railway env vars if compromised.
-4. **Enable UFW firewall** (optional, restrictive but be careful not to lock yourself out):
-   ```bash
-   sudo ufw allow 22/tcp
-   sudo ufw enable
-   ```
-5. **Railway automatically provides DDoS protection** for public endpoints.
+## 🔌 Ports exposed
 
-## 💰 Railway cost
+The Dockerfile exposes these ports. On Railway, only ONE port can be public per service (or one HTTP + one TCP). For full Pterodactyl you need multiple ports — that means **multiple Railway services** or a **real VPS**.
 
-- **Free trial**: ~$5 credit / 500 hours of usage per month (good for testing)
-- **Hobby plan**: $5/month — covers a small VPS + public TCP + custom domain
+| Port | Service |
+|------|---------|
+| 22 | SSH |
+| 80 / 443 | Panel web UI (HTTP/HTTPS) |
+| 8080 / 8443 | Wings daemon API |
+| 2022 | First game-server port (Pterodactyl allocates 2022-8222 by default) |
+| 3306 / 5432 / 6379 | DBs (if you install them) |
 
-The Ubuntu VPS image is small (~500MB) and uses minimal CPU/RAM when idle (just sshd). Should fit comfortably in the Hobby plan.
+## 🛠 Customize
 
-## 🛠 Customize the image
-
-Edit the Dockerfile to add packages. Common additions:
+Edit the Dockerfile to add packages. Common Pterodactyl additions:
 
 ```dockerfile
-# Add PostgreSQL client (for db management)
-RUN apt-get update && apt-get install -y postgresql-client && rm -rf /var/lib/apt/lists/*
+# MariaDB server (for Panel's local DB)
+RUN apt-get update && apt-get install -y mariadb-server && rm -rf /var/lib/apt/lists/*
 
-# Add Redis CLI
-RUN apt-get update && apt-get install -y redis-tools && rm -rf /var/lib/apt/lists/*
+# Tailwind / CSS tools for themeing the Panel
+RUN npm install -g tailwindcss
 
-# Add AWS CLI
-RUN pip3 install awscli --break-system-packages
+# Java 17 (for Minecraft servers via Wings)
+RUN apt-get update && apt-get install -y openjdk-17-jre-headless && rm -rf /var/lib/apt/lists/*
 ```
 
 After editing, push to your fork — Railway auto-redeploys.
 
-## 📋 Common SSH commands
+## 🆘 Troubleshooting
 
-| Action | Command |
-|--------|---------|
-| Connect | `ssh swiftpay@tcp-xxx.railway.app -p XXXX` |
-| Run command without opening shell | `ssh swiftpay@HOST -p PORT "uptime"` |
-| Copy file to VPS | `scp -P PORT file.txt swiftpay@HOST:~/` |
-| Copy file from VPS | `scp -P PORT swiftpay@HOST:~/file.txt .` |
-| Forward local port 8080 to VPS port 3000 | `ssh -L 8080:localhost:3000 swiftpay@HOST -p PORT` |
-| Mount remote filesystem | `sshfs swiftpay@HOST:/ /mnt/vps -p PORT` |
+**Can't SSH in with Termius**
+- Double-check the Railway public TCP hostname and port (NOT 22 — Railway assigns a random port)
+- Verify `VPS_PASSWORD` is set correctly in Railway env vars
+- In Termius, enable "Use legacy KEX" if you see "key exchange failed"
+- Try verbose: in Termius, toggle "SSH debug logging" in the host settings
 
-## 🔄 Persistence
+**Permission denied (publickey)**
+- If you set `VPS_PUBLIC_KEY`, ensure your private key has correct perms: `chmod 600 ~/.ssh/id_ed25519`
+- Without `VPS_PUBLIC_KEY`, password auth should work by default
 
-⚠️ **Container filesystem is ephemeral** — anything written outside `/home/$VPS_USERNAME` may not survive container restarts. Railway preserves the user's home directory if you enable a persistent volume:
+**Docker daemon won't start (Can't connect to docker.sock)**
+- This is expected on Railway — containers aren't privileged
+- For real Docker, deploy on Hetzner/DigitalOcean/Vultr (see "Recommended VPS" above)
 
-1. Railway → your service → **Settings** → **Volumes** → Add Volume
-2. Mount path: `/home/swiftpay` (or whatever your `VPS_USERNAME` is)
-3. Now your home dir persists across restarts and deploys
+**Container restarts and loses data**
+- Add a Railway volume mounted at `/root` (see Persistence section)
 
-Without a volume, you'll lose your `~/swiftpay` and any installed packages on every container restart.
+**`install-ptero` says "Permission denied"**
+- Run: `sudo install-ptero panel` (or log in as root directly)
 
 ## 📦 Repository structure
 
 ```
 ubuntu-vps/
-├── Dockerfile            # Ubuntu 24.04 + SSH + Node + Bun + dev tools
-├── entrypoint.sh         # Creates user, sets password, starts sshd
-├── swiftpay-deploy.sh    # Helper script (becomes `swiftpay-deploy` command)
-├── railway.json          # Railway config
-└── README.md             # This file
+├── Dockerfile           # Ubuntu 24.04 + Docker + Pterodactyl prereqs
+├── entrypoint.sh        # Sets root password, starts sshd, tries docker
+├── install-ptero.sh     # Pterodactyl Panel + Wings installer
+├── railway.json         # Railway deploy config
+└── README.md            # This file
 ```
-
-## 🆘 Troubleshooting
-
-**Can't connect via SSH**
-- Verify the public TCP address and port match what Railway shows in Settings → Networking
-- Verify env vars `VPS_USERNAME` and `VPS_PASSWORD` are set correctly
-- Check service logs in Railway → your service → **Logs** tab
-- Try verbose: `ssh -v swiftpay@HOST -p PORT`
-
-**Permission denied (publickey)**
-- Make sure you're using password auth (password should work by default)
-- If you set `VPS_PUBLIC_KEY`, ensure your private key (`~/.ssh/id_ed25519`) has correct perms: `chmod 600 ~/.ssh/id_ed25519`
-
-**Container restarts/loses data**
-- Add a Railway volume mounted at `/home/swiftpay` (see Persistence section)
 
 ## 📝 License
 
